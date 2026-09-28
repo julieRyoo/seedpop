@@ -1,196 +1,98 @@
-/**
- * LingoPop - Dashboard Tab Logic
- */
+// SeedPop — Dashboard Tab Component
 
-function setupDashboard() {
-  const dashLevelSelect = document.getElementById('dash-level-select');
-  if (dashLevelSelect) {
-    dashLevelSelect.addEventListener('change', () => {
-      renderDashboardLessons();
+class TabDashboard {
+  constructor() {
+    this.container = document.getElementById('dashboard-tab');
+  }
+
+  init() {
+    this.render();
+  }
+
+  render() {
+    const levels = window.seedState.getLevels();
+    const currentLevel = window.seedState.selectedLevel;
+    const filteredWords = window.seedState.getFilteredWords();
+    const incorrectWords = window.seedState.getIncorrectWords();
+    const streak = window.seedState.streak;
+
+    // Calculate Box stats
+    const boxCounts = [0, 0, 0, 0, 0];
+    filteredWords.forEach(w => {
+      const b = Math.max(1, Math.min(5, w.box || 1));
+      boxCounts[b - 1]++;
     });
-  }
-  updateDashboardStats();
-}
 
-function updateDashboardStats() {
-  const now = Date.now();
-  
-  // Update sidebar badge for total due count
-  const due = words.filter(w => !w.nextReview || w.nextReview <= now).length;
-  const sidebarDueBadge = document.getElementById('sidebar-due-badge');
-  if (sidebarDueBadge) {
-    if (due > 0) {
-      sidebarDueBadge.textContent = due;
-      sidebarDueBadge.style.display = 'inline-block';
-    } else {
-      sidebarDueBadge.style.display = 'none';
-    }
-  }
-
-  // Populate level dropdown in dashboard
-  const uniqueLevels = Array.from(new Set(words.map(w => w.level))).filter(Boolean).sort();
-  const dashLevelSelect = document.getElementById('dash-level-select');
-  
-  if (dashLevelSelect) {
-    const prevValue = dashLevelSelect.value;
-    dashLevelSelect.innerHTML = `<option value="all">전체 레벨</option>`;
-    uniqueLevels.forEach(lvl => {
-      dashLevelSelect.innerHTML += `<option value="${lvl}">${lvl}</option>`;
-    });
-    
-    if ([...dashLevelSelect.options].some(opt => opt.value === prevValue)) {
-      dashLevelSelect.value = prevValue;
-    } else {
-      dashLevelSelect.value = 'all';
-    }
-  }
-
-  renderDashboardLessons();
-}
-
-function renderDashboardLessons() {
-  const dashLevelSelect = document.getElementById('dash-level-select');
-  const levelFilter = dashLevelSelect ? dashLevelSelect.value : 'all';
-  const gridContainer = document.getElementById('dash-lessons-grid');
-  
-  if (!gridContainer) return;
-  gridContainer.innerHTML = '';
-
-  // Get unique level-lesson combinations
-  const groups = {};
-  words.forEach(w => {
-    if (levelFilter !== 'all' && w.level !== levelFilter) return;
-    const key = `${w.level}__${w.lesson}`;
-    if (!groups[key]) {
-      groups[key] = {
-        level: w.level,
-        lesson: w.lesson,
-        words: []
-      };
-    }
-    groups[key].words.push(w);
-  });
-
-  const sortedKeys = Object.keys(groups).sort((a, b) => {
-    // Sort by level first, then lesson (descending)
-    const gA = groups[a];
-    const gB = groups[b];
-    const lvlCompare = gB.level.localeCompare(gA.level);
-    if (lvlCompare !== 0) return lvlCompare;
-    return gB.lesson.localeCompare(gA.lesson, undefined, { numeric: true, sensitivity: 'base' });
-  });
-
-  if (sortedKeys.length === 0) {
-    gridContainer.innerHTML = `
-      <div class="empty-state" style="grid-column: 1/-1; margin: 20px 0;">
-        <i data-lucide="alert-circle" style="width: 32px; height: 32px; color: var(--text-secondary); margin-bottom: 12px;"></i>
-        <p style="color: var(--text-secondary);">표시할 레슨이 없습니다. 단어를 새로 등록해 주세요.</p>
+    this.container.innerHTML = `
+      <div class="level-selector-card">
+        <label for="dash-level-select" style="font-weight: 700; color: var(--text-secondary); font-size: 15px;">
+          📚 Seed 1 레벨/교재 선택:
+        </label>
+        <select id="dash-level-select" class="select-input">
+          ${levels.map(l => `<option value="${l}" ${l === currentLevel ? 'selected' : ''}>${l === 'ALL' ? '전체 보기 (All Seed 1)' : l}</option>`).join('')}
+        </select>
       </div>
-    `;
-    if (window.lucide) window.lucide.createIcons();
-    return;
-  }
 
-  const now = Date.now();
-
-  sortedKeys.forEach(key => {
-    const group = groups[key];
-    const totalCount = group.words.length;
-    const dueCount = group.words.filter(w => !w.nextReview || w.nextReview <= now).length;
-    const masteredCount = group.words.filter(w => w.box === 5).length;
-    
-    // Calculate average box progression
-    let sumProgress = 0;
-    group.words.forEach(w => {
-      sumProgress += ((w.box - 1) / 4);
-    });
-    const progressPct = totalCount > 0 ? Math.round((sumProgress / totalCount) * 100) : 0;
-
-    const card = document.createElement('div');
-    card.className = 'lesson-card';
-    card.innerHTML = `
-      <div class="lesson-card-header">
-        <span class="badge level-badge">${group.level.toUpperCase()}</span>
-        <span class="lesson-number">${group.lesson}</span>
-      </div>
-      <div class="lesson-stats">
-        <div class="stat-item">
-          <span class="label">총 단어</span>
-          <span class="value">${totalCount}개</span>
+      <div class="grid-2">
+        <!-- Streak Card -->
+        <div class="stat-card">
+          <div>
+            <span style="font-size: 13px; color: var(--text-muted); font-weight: 600;">연속 학습 스트릭</span>
+            <h3 style="font-size: 28px; font-weight: 800; color: #f59e0b; margin-top: 4px;">🔥 ${streak}일 연속 학습!</h3>
+            <p style="font-size: 13px; color: var(--text-secondary); margin-top: 4px;">매일매일 꾸준히 단어를 완성해보세요!</p>
+          </div>
+          <div style="font-size: 42px;">⭐</div>
         </div>
-        <div class="stat-item">
-          <span class="label">복습 필요</span>
-          <span class="value text-warning">${dueCount}개</span>
-        </div>
-        <div class="stat-item">
-          <span class="label">마스터</span>
-          <span class="value text-success">${masteredCount}개</span>
+
+        <!-- Incorrect Notebook Shortcut -->
+        <div class="stat-card" id="incorrect-shortcut-btn" style="border-left: 6px solid #ef4444;">
+          <div>
+            <span style="font-size: 13px; color: #ef4444; font-weight: 700;">집중 복습 필요</span>
+            <h3 style="font-size: 28px; font-weight: 800; color: #ef4444; margin-top: 4px;">📕 ${incorrectWords.length}개 오답 단어</h3>
+            <p style="font-size: 13px; color: var(--text-secondary); margin-top: 4px;">틀린 단어만 모아서 다시 복습하기 &rarr;</p>
+          </div>
+          <div style="width: 52px; height: 52px; background: #fee2e2; border-radius: 14px; display: flex; align-items: center; justify-content: center; color: #ef4444;">
+            <i data-lucide="book-open-check"></i>
+          </div>
         </div>
       </div>
-      <div class="lesson-progress-row">
-        <div class="progress-info">
-          <span>학습 완료율</span>
-          <span>${progressPct}%</span>
+
+      <!-- Leitner Spaced Repetition Box Overview -->
+      <div style="background: white; border-radius: var(--radius-lg); padding: 24px; box-shadow: var(--shadow-md); margin-bottom: 30px;">
+        <h3 style="font-size: 18px; font-weight: 800; margin-bottom: 16px; color: var(--text-main);">
+          🌱 라이트너 상자별 단어 현황 (Spaced Repetition)
+        </h3>
+        <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; text-align: center;">
+          ${boxCounts.map((count, idx) => `
+            <div style="background: #f8fafc; padding: 16px 8px; border-radius: var(--radius-md); border: 2px solid ${idx === 0 ? '#fca5a5' : '#e2e8f0'};">
+              <span style="font-size: 12px; font-weight: 700; color: var(--text-muted);">상자 ${idx + 1}</span>
+              <h4 style="font-size: 24px; font-weight: 800; color: ${idx === 0 ? '#ef4444' : 'var(--primary)'}; margin-top: 4px;">${count}개</h4>
+              <span style="font-size: 11px; color: var(--text-secondary);">${idx === 0 ? '매일 복습' : (idx === 4 ? '완전 암기' : `${idx + 1}일 주기`)}</span>
+            </div>
+          `).join('')}
         </div>
-        <div class="progress-track">
-          <div class="progress-bar" style="width: ${progressPct}%"></div>
-        </div>
-      </div>
-      <div class="lesson-card-actions">
-        <button class="btn btn-primary btn-sm btn-study" data-level="${group.level}" data-lesson="${group.lesson}">
-          <i data-lucide="book-open"></i>
-          <span>학습하기</span>
-        </button>
-        <button class="btn btn-outline btn-sm btn-quiz" data-level="${group.level}" data-lesson="${group.lesson}">
-          <i data-lucide="award"></i>
-          <span>퀴즈풀기</span>
-        </button>
       </div>
     `;
 
-    // Click triggers
-    card.querySelector('.btn-study').addEventListener('click', (e) => {
-      const targetLvl = e.currentTarget.getAttribute('data-level');
-      const targetLsn = e.currentTarget.getAttribute('data-lesson');
-      
-      // Go to study tab
-      document.getElementById('study-level-filter').value = targetLvl;
-      updateLessonFilters('study');
-      document.getElementById('study-lesson-filter').value = targetLsn;
-      
-      const studySeg = document.getElementById('study-segment-filter');
-      if (studySeg) studySeg.value = 'all';
-      updateSegmentFiltersVisibility('study');
-      
-      document.getElementById('nav-study-btn').click();
-      initStudySession();
-    });
+    lucide.createIcons();
 
-    card.querySelector('.btn-quiz').addEventListener('click', (e) => {
-      const targetLvl = e.currentTarget.getAttribute('data-level');
-      const targetLsn = e.currentTarget.getAttribute('data-lesson');
-      
-      // Select Level & Lesson in Quiz tab
-      document.getElementById('quiz-level-select').value = targetLvl;
-      updateLessonFilters('quiz');
-      document.getElementById('quiz-lesson-select').value = targetLsn;
-      
-      const quizSeg = document.getElementById('quiz-segment-select');
-      if (quizSeg) quizSeg.value = 'all';
-      updateSegmentFiltersVisibility('quiz');
-      
-      // Go to quiz tab
-      const navButtons = document.querySelectorAll('.nav-btn');
-      const quizNavBtn = Array.from(navButtons).find(btn => btn.getAttribute('data-target') === 'quiz-tab');
-      if (quizNavBtn) {
-        quizNavBtn.click();
-      }
-    });
+    // Event listeners
+    const levelSelect = document.getElementById('dash-level-select');
+    if (levelSelect) {
+      levelSelect.addEventListener('change', (e) => {
+        window.seedState.selectedLevel = e.target.value;
+        this.render();
+      });
+    }
 
-    gridContainer.appendChild(card);
-  });
-
-  if (window.lucide) {
-    window.lucide.createIcons();
+    const shortcut = document.getElementById('incorrect-shortcut-btn');
+    if (shortcut) {
+      shortcut.addEventListener('click', () => {
+        // Switch to study tab filtered for incorrect words
+        document.querySelector('[data-target="study-tab"]').click();
+      });
+    }
   }
 }
+
+window.tabDashboard = new TabDashboard();

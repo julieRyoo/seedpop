@@ -1,232 +1,135 @@
-/**
- * LingoPop - Dictation Tab Logic
- */
+// SeedPop — Dictation (받아쓰기) Component for 2nd Graders
 
-function setupDictation() {
-  const levelSelect = document.getElementById('dictation-level-filter');
-  if (levelSelect) {
-    levelSelect.addEventListener('change', () => {
-      updateLessonFilters('dictation');
-    });
+class TabDictation {
+  constructor() {
+    this.container = document.getElementById('dictation-tab');
+    this.currentWord = null;
+    this.showHint = false;
   }
 
-  const lessonSelect = document.getElementById('dictation-lesson-filter');
-  if (lessonSelect) {
-    lessonSelect.addEventListener('change', () => {
-      updateSegmentFiltersVisibility('dictation');
-    });
+  init() {
+    this.showHint = false;
+    this.loadNextWord();
   }
 
-  const startBtn = document.getElementById('dictation-start-btn');
-  if (startBtn) {
-    startBtn.addEventListener('click', startDictation);
+  loadNextWord() {
+    const words = window.seedState.getFilteredWords();
+    if (words.length === 0) return;
+
+    const randomIndex = Math.floor(Math.random() * words.length);
+    this.currentWord = words[randomIndex];
+    this.showHint = false;
+    this.render();
   }
 
-  const nextBtn = document.getElementById('dictation-next-btn');
-  if (nextBtn) {
-    nextBtn.addEventListener('click', () => {
-      dictationSession.currentIndex++;
-      if (dictationSession.currentIndex < dictationSession.prompts.length) {
-        renderDictationPrompt();
-      } else {
-        showDictationResults();
-      }
-    });
-  }
+  render() {
+    if (!this.currentWord) return;
 
-  const retryBtn = document.getElementById('dictation-retry-btn');
-  if (retryBtn) {
-    retryBtn.addEventListener('click', () => {
-      resetDictationState();
-    });
-  }
+    const hintText = this.showHint 
+      ? `첫 글자 힌트: "${this.currentWord.word.charAt(0).toUpperCase()}..." (총 ${this.currentWord.word.length}글자)`
+      : `총 ${this.currentWord.word.length}글자의 단어입니다.`;
 
-  const replayBtn = document.getElementById('dictation-replay-btn');
-  if (replayBtn) {
-    replayBtn.addEventListener('click', () => {
-      const currentPrompt = dictationSession.prompts[dictationSession.currentIndex];
-      if (currentPrompt) {
-        speakWord(currentPrompt.word.word);
-      }
-    });
-  }
-}
+    this.container.innerHTML = `
+      <div class="dictation-container">
+        <div style="background: white; border-radius: var(--radius-lg); padding: 32px 24px; box-shadow: var(--shadow-pop); border: 3px solid #e0e7ff; margin-bottom: 24px;">
+          <span style="font-size: 14px; font-weight: 700; color: var(--primary);">
+            🎧 소리를 듣고 영단어 스펠링을 입력하세요!
+          </span>
+          
+          <h3 style="font-size: 26px; font-weight: 800; color: var(--text-main); margin-top: 12px;">
+            "${this.currentWord.definition}"
+          </h3>
 
-function resetDictationState() {
-  const setupContainer = document.getElementById('dictation-setup-container');
-  const playContainer = document.getElementById('dictation-play-container');
-  const resultContainer = document.getElementById('dictation-result-container');
+          <div style="display: flex; justify-content: center; gap: 16px; margin-top: 20px; flex-wrap: wrap;">
+            <button class="btn btn-primary" id="dict-speak-normal">
+              <i data-lucide="volume-2"></i> 보통 속도 듣기
+            </button>
+            <button class="btn btn-secondary" id="dict-speak-slow" style="border: 2px solid #cbd5e1;">
+              <i data-lucide="turtle"></i> 천천히 듣기 (0.7x)
+            </button>
+            ${this.currentWord.plural ? `
+              <button type="button" class="btn btn-secondary" id="dict-plural-audio-btn" style="border: 2px solid #7dd3fc; background: #e0f2fe; color: #0369a1;">
+                <i data-lucide="volume-2"></i> 복수형 (${this.currentWord.plural}) 듣기
+              </button>
+            ` : ''}
+          </div>
 
-  if (setupContainer) setupContainer.style.display = 'block';
-  if (playContainer) playContainer.style.display = 'none';
-  if (resultContainer) resultContainer.style.display = 'none';
+          <p style="font-size: 14px; color: var(--text-muted); margin-top: 16px;">
+            ${hintText}
+          </p>
+        </div>
 
-  dictationSession.words = [];
-  dictationSession.currentIndex = 0;
-  dictationSession.prompts = [];
+        <form id="dictation-form">
+          <input type="text" id="dictation-input-field" class="dictation-input" placeholder="영단어 작성..." autocomplete="off" autofocus />
 
-  const dictationSeg = document.getElementById('dictation-segment-filter');
-  if (dictationSeg) dictationSeg.value = 'all';
-  updateSegmentFiltersVisibility('dictation');
-}
+          <div style="display: flex; justify-content: center; gap: 12px; margin-top: 12px;">
+            <button type="button" class="btn btn-secondary" id="dict-hint-btn">
+              💡 첫 글자 힌트 보기
+            </button>
+            <button type="submit" class="btn btn-success">
+              ✅ 정답 확인하기
+            </button>
+          </div>
+        </form>
 
-function startDictation() {
-  const levelVal = document.getElementById('dictation-level-filter').value;
-  const lessonVal = document.getElementById('dictation-lesson-filter').value;
-  const modeVal = document.getElementById('dictation-mode-select').value;
-
-  let filtered = [];
-  if (levelVal === 'all') {
-    filtered = [...words];
-  } else {
-    if (lessonVal === 'all') {
-      filtered = words.filter(w => w.level === levelVal);
-    } else {
-      filtered = words.filter(w => w.level === levelVal && w.lesson === lessonVal);
-      // Ensure sorted index by ID
-      filtered.sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true, sensitivity: 'base' }));
-      
-      const segmentVal = document.getElementById('dictation-segment-filter').value;
-      if (segmentVal === '1') {
-        filtered = filtered.slice(0, 20);
-      } else if (segmentVal === '2') {
-        filtered = filtered.slice(20, 40);
-      } else if (segmentVal === '3') {
-        filtered = filtered.slice(40, 60);
-      }
-    }
-  }
-
-  if (filtered.length === 0) {
-    alert("선택한 범위에 해당하는 단어가 없습니다.");
-    return;
-  }
-
-  // Shuffle dictation questions
-  filtered = filtered.sort(() => Math.random() - 0.5);
-
-  const countVal = document.getElementById('dictation-count-select').value;
-  if (countVal !== 'all') {
-    const limit = parseInt(countVal);
-    filtered = filtered.slice(0, limit);
-  }
-
-  dictationSession.words = filtered;
-  dictationSession.currentIndex = 0;
-  dictationSession.mode = modeVal;
-  dictationSession.prompts = [];
-
-  // Generate prompts
-  filtered.forEach(w => {
-    let type = 'audio'; // default
-    if (modeVal === 'audio-only') {
-      type = 'audio';
-    } else if (modeVal === 'text-only') {
-      type = 'text';
-    } else if (modeVal === 'mixed') {
-      type = Math.random() < 0.5 ? 'audio' : 'text';
-    }
-
-    const promptText = w.word; // Always show English word when type is text
-    dictationSession.prompts.push({
-      word: w,
-      type: type,
-      promptText: promptText
-    });
-  });
-
-  // Setup badge scope text
-  const badgeEl = document.getElementById('dictation-scope-badge');
-  if (badgeEl) {
-    if (levelVal === 'all') {
-      badgeEl.textContent = '전체 보관 단어';
-    } else {
-      badgeEl.textContent = lessonVal === 'all' ? `${levelVal} (전체 레슨)` : `${levelVal} — ${lessonVal}`;
-    }
-  }
-
-  // Hide settings, show play area
-  document.getElementById('dictation-setup-container').style.display = 'none';
-  document.getElementById('dictation-play-container').style.display = 'block';
-  document.getElementById('dictation-result-container').style.display = 'none';
-
-  renderDictationPrompt();
-}
-
-function renderDictationPrompt() {
-  const currentPrompt = dictationSession.prompts[dictationSession.currentIndex];
-  if (!currentPrompt) return;
-
-  const total = dictationSession.prompts.length;
-  const currentNum = dictationSession.currentIndex + 1;
-
-  document.getElementById('dictation-progress-text').textContent = `${currentNum} / ${total} 단어`;
-  
-  const hintTextEl = document.getElementById('dictation-card-hint-text');
-  const promptTextEl = document.getElementById('dictation-card-prompt-text');
-  const replayBtn = document.getElementById('dictation-replay-btn');
-
-  if (currentPrompt.type === 'text') {
-    hintTextEl.textContent = '화면의 영어 단어를 보고 종이에 스펠링을 받아 적으세요.';
-    promptTextEl.textContent = currentPrompt.promptText;
-    promptTextEl.style.display = 'block';
-    if (replayBtn) replayBtn.style.display = 'none';
-  } else {
-    hintTextEl.textContent = '음성을 잘 듣고 종이에 영어 단어(스펠링)를 받아 적으세요.';
-    promptTextEl.style.display = 'none';
-    if (replayBtn) replayBtn.style.display = 'flex';
-    
-    // Auto speak
-    setTimeout(() => {
-      speakWord(currentPrompt.word.word);
-    }, 150);
-  }
-
-  // Make the next button say "정답 확인" on the last word
-  const nextBtn = document.getElementById('dictation-next-btn');
-  if (nextBtn) {
-    if (currentNum === total) {
-      nextBtn.innerHTML = `<span>정답 확인하기 (완료)</span> <i data-lucide="check-square"></i>`;
-    } else {
-      nextBtn.innerHTML = `<span>다음 단어</span> <i data-lucide="arrow-right"></i>`;
-    }
-    if (window.lucide) window.lucide.createIcons();
-  }
-}
-
-function showDictationResults() {
-  const setupContainer = document.getElementById('dictation-setup-container');
-  const playContainer = document.getElementById('dictation-play-container');
-  const resultContainer = document.getElementById('dictation-result-container');
-
-  setupContainer.style.display = 'none';
-  playContainer.style.display = 'none';
-  resultContainer.style.display = 'block';
-
-  const tbody = document.getElementById('dictation-answers-tbody');
-  tbody.innerHTML = '';
-
-  dictationSession.prompts.forEach((p, idx) => {
-    const tr = document.createElement('tr');
-    tr.style.borderBottom = '1px solid var(--glass-border)';
-    
-    // Highlight mixed formats
-    const isText = p.type === 'text';
-    const promptCellClass = isText ? 'color: var(--color-primary);' : 'color: #fff;';
-    const typeLabel = isText ? '[스펠링 보기]' : '[음성 듣기]';
-    const displayPrompt = isText ? p.promptText : '🔊 (음성 출제됨)';
-
-    tr.innerHTML = `
-      <td style="padding: 12px 16px; color: var(--text-secondary); font-weight: 500;">${idx + 1}</td>
-      <td style="padding: 12px 16px; font-weight: 600; ${promptCellClass}">${typeLabel} ${displayPrompt}</td>
-      <td style="padding: 12px 16px; font-family: var(--font-display); font-weight: 700; color: #fff; font-size: 15px;">${p.word.word}</td>
-      <td style="padding: 12px 16px; font-style: italic; color: var(--text-muted); font-size: 13px;">${p.word.pos}</td>
-      <td style="padding: 12px 16px; color: var(--text-secondary);">${p.word.definition}</td>
+        <div id="dictation-feedback" style="margin-top: 20px; font-size: 18px; font-weight: 800;"></div>
+      </div>
     `;
-    tbody.appendChild(tr);
-  });
 
-  if (window.lucide) {
-    window.lucide.createIcons();
+    lucide.createIcons();
+    window.voiceEngine.speak(this.currentWord.word);
+
+    // Speakers
+    document.getElementById('dict-speak-normal').addEventListener('click', () => {
+      window.voiceEngine.speak(this.currentWord.word, false);
+    });
+
+    document.getElementById('dict-speak-slow').addEventListener('click', () => {
+      window.voiceEngine.speak(this.currentWord.word, true);
+    });
+
+    const dictPluralBtn = document.getElementById('dict-plural-audio-btn');
+    if (dictPluralBtn && this.currentWord.plural) {
+      dictPluralBtn.addEventListener('click', () => {
+        window.voiceEngine.speak(this.currentWord.plural);
+      });
+    }
+
+    // Hint
+    document.getElementById('dict-hint-btn').addEventListener('click', () => {
+      this.showHint = true;
+      this.render();
+    });
+
+    // Submit
+    const form = document.getElementById('dictation-form');
+    const input = document.getElementById('dictation-input-field');
+    const feedback = document.getElementById('dictation-feedback');
+
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const val = input.value.trim().toLowerCase();
+      const answer = this.currentWord.word.trim().toLowerCase();
+
+      if (val === answer) {
+        feedback.style.color = '#10b981';
+        feedback.innerHTML = `🎉 정답입니다! (${this.currentWord.word})`;
+        window.seedState.markWordResult(this.currentWord.id, true);
+
+        if (typeof confetti === 'function') {
+          confetti({ particleCount: 40, spread: 50, origin: { y: 0.7 } });
+        }
+
+        setTimeout(() => this.loadNextWord(), 1400);
+      } else {
+        feedback.style.color = '#ef4444';
+        feedback.innerHTML = `❌ 아쉬워요! 정답은 "${this.currentWord.word}" 입니다.`;
+        window.seedState.markWordResult(this.currentWord.id, false);
+
+        setTimeout(() => this.loadNextWord(), 2000);
+      }
+    });
   }
 }
+
+window.tabDictation = new TabDictation();
