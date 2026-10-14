@@ -1,6 +1,6 @@
 // SeedPop — Core State & Leitner Spaced Repetition Logic
 
-const SEEDPOP_VERSION = (typeof window !== 'undefined' && window.APP_VERSION) ? window.APP_VERSION : "2026.09.28.1";
+const SEEDPOP_VERSION = (typeof window !== 'undefined' && window.APP_VERSION) ? window.APP_VERSION : "2026.10.15.1";
 
 class SeedPopState {
   constructor() {
